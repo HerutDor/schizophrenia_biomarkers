@@ -54,18 +54,18 @@ for (geo_database in geo_databases) {
     )
 
     # number of scz and control in the data set
-    sample_info <- readRDS(file = paste0(temp_path, "_sample_info.rds"))
+    temp_sample_info <- readRDS(file = paste0(temp_path, "_sample_info.rds"))
 
     # print the demographic information
     cat("\nGEO Database:", geo_database, "\n")
 
     cat("\nSample Status Table:")
-    print(table(sample_info$status))
+    print(table(temp_sample_info$status))
 
     # Check if "age" column exists and output mean and standard deviation
-    if ("age" %in% colnames(sample_info)) {
-        mean_age <- round(mean(sample_info$age), 2)
-        sd_age <- round(sd(sample_info$age), 2)
+    if ("age" %in% colnames(temp_sample_info)) {
+        mean_age <- round(mean(temp_sample_info$age), 2)
+        sd_age <- round(sd(temp_sample_info$age), 2)
 
         cat("\nAge Information:\n")
         cat("Mean Age:", mean_age, "\n")
@@ -75,39 +75,23 @@ for (geo_database in geo_databases) {
 
 # Graphs ----
 
-### Fig. 1 ----
-# A heatmap of all the clustering genes annotated by label (healthy control, cluster 1 and cluster 2).
-# This will demonstrate that one cluster has up-regulation of genes and the second cluster has gene expression
-# patterns similar to that of the healthy control.
-expr_data_high_si <-
-    expr_data[rownames(expr_data) %in% clustering_genes, ]
+### Fig. 1a ----
+# PCA classification of the samples with labels indicating the cluster of this sample - ribosome genes
+pca_plot(expr_data_ribosome, label_per_sample, "Ribosomal")
 
-gene_groups <- data.frame(replicate(1, rep(0, nrow(si_score_by_gene))))
-rownames(gene_groups) <- rownames(si_score_by_gene)
-colnames(gene_groups) <- "group"
-gene_groups$group[rownames(gene_groups) %in% ribosomal_genes_id] <- 1
-gene_groups$group[rownames(gene_groups) %in% ubl_genes_id] <- 2
-
-heatmap_clustering_genes(expr_data_high_si, label_per_sample, gene_groups)
+### Fig. 1b ----
+# PCA classification of the samples with labels indicating the cluster of this sample - ubl genes
+pca_plot(expr_data_ubl, label_per_sample, "UPS")
 
 ### Fig. 2a ----
-# PCA classification of the samples with labels indicating the cluster of this sample - ribosome genes
-pca_plot(expr_data_ribosome, label_per_sample, "Ribosomal", type = "2D")
-
-### Fig. 2b ----
-# PCA classification of the samples with labels indicating the cluster of this sample - ubl genes
-pca_plot(expr_data_ubl, label_per_sample, "UPS", type = "2D")
-
-### Fig. 3a ----
 # A heatmap of the enrichment genes annotated by clusters - ribosome genes
-heatmap_gene_analysis(expr_data_ribosome, cluster_per_sample, "ribosome")
 heatmap_gene_analysis_control(expr_data_ribosome, label_per_sample, "ribosome")
 
-### Fig. 3b ----
+### Fig. 2b ----
 # A heatmap of the enrichment genes annotated by clusters - ubl genes
-heatmap_gene_analysis(expr_data_ubl, cluster_per_sample, "UPS")
+heatmap_gene_analysis_control(expr_data_ubl, label_per_sample, "UPS")
 
-### Fig 4. ----
+### Fig 3. ----
 # Barplot of the truly identify scz patients out of the total scz patients in each dataset
 
 conf_matrix$TP_percent <- conf_matrix$TP * 100
@@ -121,6 +105,7 @@ bar_plot(conf_matrix)
 # Supplementary Graphs ----
 
 ### Supplementary Fig. 1 ----
+
 info_by_cluster <- merge(sample_info, cluster_per_sample, by = "row.names")
 rownames(info_by_cluster) <- info_by_cluster$Row.names
 info_by_cluster <- subset(info_by_cluster, select = -c(Row.names, status))
@@ -131,5 +116,5 @@ lr_age_ribosome <- age_gene_lr(info_by_cluster, expr_data_ribosome_scz)
 lr_age_ubl <- age_gene_lr(info_by_cluster, expr_data_ubl)
 
 # scatter plot of the regression coefficients
-lr_coefficients_plot(lr_age_ribosome, "ribosome")
-lr_coefficients_plot(lr_age_ubl, "UPS")
+lr_coefficients_plot(lr_age_ribosome, "ribosome", "S1a")
+lr_coefficients_plot(lr_age_ubl, "UPS", "S1b")

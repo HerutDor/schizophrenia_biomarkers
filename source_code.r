@@ -23,6 +23,7 @@ library(NbClust) # for visualise clusters
 library(cowplot) # multiple plot in the same figure
 library(progress) # progress bar
 library(readxl) # read excel files
+library(grid) # for grid.arrange
 
 # Functions ----
 
@@ -459,7 +460,7 @@ heatmap_clustering_genes <- function(expr_data, label_per_sample, gene_groups) {
     print(p)
 }
 
-pca_plot <- function(expr_data, label_per_sample, name, type) {
+pca_plot <- function(expr_data, label_per_sample, name) {
     # Perform PCA and keep the first three principal components
     pca_results <- prcomp(scale(t(expr_data)))
     pca_data <- as.data.frame(pca_results$x[, 1:3])
@@ -470,53 +471,40 @@ pca_plot <- function(expr_data, label_per_sample, name, type) {
         labels = c("healthy controls", "cluster I", "cluster II")
     )
 
-    # Define color mapping consistent with 3D plot
+    # Define color mapping consistent with the previous plots
     color_mapping <- c("healthy controls" = "#06D6A0", "cluster I" = "#EF476F", "cluster II" = "#FFD166")
 
-    if (type == "2D") {
-        # Plot the PCA with annotation of the clusters
-        plot <- ggplot(pca_data, aes(x = PC1, y = PC2)) +
-            geom_point(aes(color = label, fill = label), size = 20, shape = 21, alpha = 0.8) +
-            scale_color_manual(values = color_mapping) +
-            scale_fill_manual(values = color_mapping) +
-            theme_minimal() +
-            labs(
-                # title = paste("PCA of", name, "Gene Expression Data"),
-                x = "PC1",
-                y = "PC2"
-            ) +
-            theme(
-                # plot.title = element_text(hjust = 0.5, size = 36), # Center and size the title
-                legend.text = element_text(size = 34), # Size the legend text
-                legend.title = element_blank(), # Remove the legend title
-                legend.position = c(.87, .87), # Position the legend in the top right
-                axis.title = element_text(size = 34), # Increase size of axis titles
-                axis.text.x = element_text(size = 32), # Increase size of x-axis text
-                axis.text.y = element_text(size = 32), # Increase size of y-axis text
-                legend.background = element_rect(color = "black", size = 2) # Black border around the legend
-            )
-    } else if (type == "3D") {
-        plot <- plot_ly(
-            data = pca_data, x = ~PC1, y = ~PC2, z = ~PC3, color = ~label,
-            colors = color_mapping,
-            type = "scatter3d", mode = "markers",
-            marker = list(size = 8, opacity = 0.8)
-        ) %>%
-            layout(
-                title = paste("PCA of", name, "Gene Expression Data"),
-                scene = list(
-                    xaxis = list(title = "PC1"),
-                    yaxis = list(title = "PC2"),
-                    zaxis = list(title = "PC3")
-                ),
-                legend = list(
-                    font = list(size = 16),
-                    bordercolor = "black",
-                    borderwidth = 2
-                ),
-                margin = list(l = 0, r = 0, b = 0, t = 80) # Increase top margin
-            )
-    }
+    # Plot the PCA with annotation of the clusters
+    plot <- ggplot(pca_data, aes(x = PC1, y = PC2)) +
+        geom_point(aes(color = label, fill = label), size = 6, shape = 21, alpha = 0.8) +
+        scale_color_manual(values = color_mapping) +
+        scale_fill_manual(values = color_mapping) +
+        theme_minimal() +
+        labs(
+            x = "PC1",
+            y = "PC2"
+        ) +
+        theme(
+            panel.background = element_rect(fill = "white", color = "white"), # Set background to white
+            plot.background = element_rect(fill = "white", color = "white"), # Set entire plot background to white
+            legend.text = element_text(size = 12), # Size the legend text
+            legend.title = element_blank(), # Remove the legend title
+            legend.position = c(.87, .87), # Position the legend in the top right
+            axis.title = element_text(size = 14), # Increase size of axis titles
+            axis.text.x = element_text(size = 12), # Increase size of x-axis text
+            axis.text.y = element_text(size = 12), # Increase size of y-axis text
+            legend.background = element_rect(color = "black", size = 0.5) # Black border around the legend
+        )
+
+    # Save plot as high-resolution TIFF file
+    ggsave(
+        filename = "/Users/herutdor/Library/Mobile Documents/com~apple~CloudDocs/Herut/R/GSE38484/Paper/figure for submission/Fig_1.tiff",
+        plot = plot,
+        device = "tiff",
+        width = 10, height = 10, units = "in",
+        dpi = 300 # High resolution for publication
+    )
+
     return(plot)
 }
 
@@ -565,38 +553,39 @@ heatmap_gene_analysis <- function(expr_data, cluster_per_sample, gene_group_name
         cluster_rows = FALSE,
         cluster_cols = FALSE,
         main = paste("Heatmap for the", gene_group_name, "genes"),
+        annotation_legend_param = list(
+            grid_height = unit(1, "cm"), # Increase the height of the legend
+            grid_width = unit(1, "cm"), # Increase the width of the legend
+            labels_gp = gpar(fontsize = 15) # Increase the font size of the legend labels
+        ),
         legend = TRUE,
         gaps_col = cumsum(c(33))
     )
+
     print(p)
 }
 
 heatmap_gene_analysis_control <- function(expr_data, label_per_sample, gene_group_name) {
     # Prepare expression data
-    samples_id <- colnames(expr_data)
-    scz_samples <- intersect(samples_id, rownames(label_per_sample))
-    control_samples <- setdiff(samples_id, scz_samples)
-
+    control_samples <- rownames(label_per_sample)[label_per_sample$label == 0]
     expr_data_control <- expr_data[, colnames(expr_data) %in% control_samples]
-    expr_data_scz <- expr_data[, colnames(expr_data) %in% scz_samples]
-
-    mean_ribosome_control <- rowMeans(expr_data_control)
-    expr_data_relative <- sweep(expr_data_scz, 1, mean_ribosome_control, `-`)
-
-    # Extract the order of the samples by the cluster number
-    sample_order <- order(label_per_sample$num_cluster)
+    mean_control <- rowMeans(expr_data_control)
+    expr_data_relative <- sweep(expr_data, 1, mean_control, `-`)
 
     # Adjust the cluster numbers to labels "I" and "II"
-    label_per_sample$num_cluster <- factor(label_per_sample$num_cluster, levels = c(0, 1, 2), labels = c("healthy controls", "cluster I", "cluster II"))
+    label_per_sample$label <- factor(label_per_sample$label, levels = c(1, 2, 0), labels = c("I", "II", "Control  "))
+
+    # Extract the order of the samples by the cluster number
+    sample_order <- order(label_per_sample$label)
 
     # Order the columns of 'expr_data' based on 'sample_order'
     ordered_data <- expr_data_relative[, sample_order]
 
     # Define colors for the annotations
-    annotation_colors <- list(cluster = c("healthy controls" = "#06D6A0", "cluster I" = "#EF476F", "cluster II" = "#FFD166"))
+    annotation_colors <- list(group = c("Control  " = "#06D6A0", "I" = "#EF476F", "II" = "#FFD166"))
 
     # Create custom annotation data frame
-    annotation_col <- data.frame(cluster = label_per_sample$num_cluster[sample_order])
+    annotation_col <- data.frame(group = label_per_sample$label[sample_order])
     rownames(annotation_col) <- rownames(label_per_sample)[sample_order]
 
     genes_font_size <- 10
@@ -604,22 +593,36 @@ heatmap_gene_analysis_control <- function(expr_data, label_per_sample, gene_grou
         genes_font_size <- 6
     }
 
+
+    tiff(
+        file = "/Users/herutdor/Library/Mobile Documents/com~apple~CloudDocs/Herut/R/GSE38484/Paper/figure for submission/Fig_2.tiff", # The directory you want to save the file in
+        width = 10, # The width of the plot in inches
+        height = 10, # The height of the plot in inches
+        units = "in", # Units for width and height
+        res = 300 # Resolution in DPI for high quality
+    )
+
     # Plot the heatmap
     p <- pheatmap(ordered_data,
+        show_rownames = TRUE,
+        show_colnames = FALSE,
+        cluster_rows = FALSE,
+        cluster_cols = FALSE,
         annotation_col = annotation_col,
         annotation_colors = annotation_colors,
         fontsize_row = genes_font_size, # Set the font size for row names
         fontsize = 14,
         fontsize_number = 14,
-        show_rownames = TRUE,
-        show_colnames = FALSE,
-        cluster_rows = FALSE,
-        cluster_cols = FALSE,
-        main = paste("Heatmap for the", gene_group_name, "genes"),
+        annotation_legend_param = list(
+            grid_height = unit(1, "cm"), # Increase the height of the legend
+            grid_width = unit(1, "cm"), # Increase the width of the legend
+            labels_gp = gpar(fontsize = 15) # Increase the font size of the legend labels
+        ),
         legend = TRUE,
-        gaps_col = cumsum(c(96, 33, 73))
+        gaps_col = cumsum(c(33, 73, 96))
     )
-    print(p)
+
+    dev.off() # Close the graphics device
 }
 
 # Function to plot the confusion matrix data
@@ -628,7 +631,8 @@ bar_plot <- function(conf_matrix) {
     conf_matrix$Fill <- rep("All schizophrenia samples", nrow(conf_matrix))
     conf_matrix$Fill_TP <- "Schizophrenia samples the model predicted"
 
-    ggplot() +
+    # Create the bar plot
+    plot <- ggplot() +
         geom_bar(
             data = conf_matrix, aes(x = Dataset, y = Total, fill = "All schizophrenia samples"),
             stat = "identity"
@@ -653,6 +657,8 @@ bar_plot <- function(conf_matrix) {
         ) +
         theme_minimal() +
         theme(
+            panel.background = element_rect(fill = "white", color = "white"), # Set panel background to white
+            plot.background = element_rect(fill = "white", color = "white"), # Set entire plot background to white
             axis.title = element_text(size = 34), # Increase size of axis titles
             axis.text.x = element_text(size = 32), # Increase x-axis labels size (Dataset names)
             axis.text.y = element_text(size = 32), # Increase size of y-axis text
@@ -661,6 +667,17 @@ bar_plot <- function(conf_matrix) {
             legend.title = element_blank(), # Remove the legend title
             legend.background = element_rect(color = "black", size = 2) # Black border around the legend
         )
+
+    # Save the plot as a high-resolution TIFF file
+    ggsave(
+        filename = "/Users/herutdor/Library/Mobile Documents/com~apple~CloudDocs/Herut/R/GSE38484/Paper/figure for submission/Fig_3.tiff",
+        plot = plot,
+        device = "tiff",
+        width = 30, height = 30, units = "in",
+        dpi = 300
+    ) # High resolution for publication
+
+    return(plot)
 }
 
 # Statistical test for significantly different between the 2 clusters
@@ -781,7 +798,14 @@ age_gene_lr <- function(info_by_cluster, expr_data) {
 }
 
 # Function to plot the coefficients of the linear regression model
-lr_coefficients_plot <- function(lr_age_ribosome, gene_group_name) {
+lr_coefficients_plot <- function(lr_age_ribosome, gene_group_name, text_subplot) {
+    pdf(
+        file = paste("/Users/herutdor/Library/Mobile Documents/com~apple~CloudDocs/Herut/R/GSE38484/Paper/figure for submission/Fig_", text_subplot, ".pdf", sep = ""),
+        width = 10, # Width of the plot in inches
+        height = 10, # Height of the plot in inches
+        pointsize = 12 # Base font size
+    )
+
     # scatter plot of the regression coefficients
     plot(lr_age_ribosome[, "age_coeffient"],
         ylim = range(-1, 1),
@@ -795,6 +819,9 @@ lr_coefficients_plot <- function(lr_age_ribosome, gene_group_name) {
         cex.axis = 1.4 # Font size for axis numbering
     )
 
+    # Add text (S1a) in the top left corner
+    text(x = 1, y = 0.95, labels = paste("(", text_subplot, ")", sep = ""), pos = 4, cex = 1.6, font = 2)
+
     # Add points for cluster coefficients
     points(lr_age_ribosome[, "cluster_coeffient"], col = "blue", pch = 17) # Triangle shape for points
 
@@ -806,4 +833,6 @@ lr_coefficients_plot <- function(lr_age_ribosome, gene_group_name) {
         title = "Coefficient Type", # Title of the legend
         cex = 1.4 # Font size for text within the legend
     )
+
+    dev.off()
 }
